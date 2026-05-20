@@ -1,43 +1,82 @@
 import streamlit as st
 from openai import OpenAI
 
+# =========================
+# 화면 설정
+# =========================
 st.set_page_config(
-    page_title="나만의 챗봇",
-    page_icon="💬",
+    page_title="문장 다듬기 챗봇",
+    page_icon="✍️",
     layout="centered"
 )
 
-st.title("💬 나만의 챗봇")
-st.write("간단한 질문을 입력하면 AI가 답변합니다.")
+st.title("✍️ 문장 다듬기 챗봇")
+st.write("문장을 입력하면 더 자연스럽고 읽기 좋게 다듬어줍니다.")
 
-# API 키는 코드에 넣지 않습니다.
-# Streamlit Cloud의 Secrets에 OPENAI_API_KEY로 따로 저장하세요.
+# =========================
+# API 키
+# GitHub 코드에는 API 키를 넣지 않습니다.
+# Streamlit Cloud > Settings > Secrets 에만 넣습니다.
+# =========================
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
+# 모델명은 필요하면 바꿀 수 있습니다.
 MODEL = "gpt-4o-mini"
 
+# =========================
+# 문장 다듬기 규칙
+# =========================
 SYSTEM_PROMPT = """
-너는 친절하고 쉽게 설명하는 한국어 챗봇이다.
-답변은 너무 길지 않게 하고, 초보자도 이해할 수 있게 말한다.
-모르는 것은 지어내지 말고 모른다고 말한다.
+너는 한국어 문장을 자연스럽게 다듬어주는 글쓰기 도우미다.
+
+사용자가 문장을 입력하면 다음 방식으로 답한다.
+
+1. 다듬은 문장
+2. 왜 이렇게 고쳤는지 짧은 설명
+3. 다른 표현 1개
+
+규칙:
+- 원래 의미를 바꾸지 않는다.
+- 없는 내용을 새로 지어내지 않는다.
+- 문장을 너무 과장하지 않는다.
+- 한국어답고 자연스럽게 고친다.
+- 사용자가 짧은 문장을 입력해도 친절하게 다듬어준다.
 """
 
+# =========================
+# 대화 기록
+# =========================
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": "안녕하세요. 무엇이든 물어보세요."}
+        {
+            "role": "assistant",
+            "content": "다듬고 싶은 문장을 입력해 주세요."
+        }
     ]
 
+# =========================
+# 초기화 버튼
+# =========================
 if st.button("대화 초기화"):
     st.session_state.messages = [
-        {"role": "assistant", "content": "대화를 다시 시작합니다. 무엇이든 물어보세요."}
+        {
+            "role": "assistant",
+            "content": "대화를 다시 시작합니다. 다듬고 싶은 문장을 입력해 주세요."
+        }
     ]
     st.rerun()
 
+# =========================
+# 이전 대화 보여주기
+# =========================
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-user_message = st.chat_input("메시지를 입력하세요")
+# =========================
+# 사용자 입력
+# =========================
+user_message = st.chat_input("예: 오늘 너무 힘들었지만 그래도 잘 버틴 것 같아")
 
 if user_message:
     st.session_state.messages.append(
@@ -47,11 +86,13 @@ if user_message:
     with st.chat_message("user"):
         st.markdown(user_message)
 
-    messages_for_api = [{"role": "system", "content": SYSTEM_PROMPT}]
-    messages_for_api += st.session_state.messages
+    messages_for_api = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_message}
+    ]
 
     with st.chat_message("assistant"):
-        with st.spinner("답변을 작성하는 중입니다..."):
+        with st.spinner("문장을 다듬는 중입니다..."):
             response = client.chat.completions.create(
                 model=MODEL,
                 messages=messages_for_api
