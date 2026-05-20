@@ -1,106 +1,232 @@
 import streamlit as st
 from openai import OpenAI
 
-# =========================
-# 화면 설정
-# =========================
+# =====================================================
+# 기본 설정
+# =====================================================
 st.set_page_config(
-    page_title="문장 다듬기 챗봇",
+    page_title="문장 다듬기 앱",
     page_icon="✍️",
-    layout="centered"
+    layout="wide"
 )
 
-st.title("✍️ 문장 다듬기 챗봇")
-st.write("문장을 입력하면 더 자연스럽고 읽기 좋게 다듬어줍니다.")
+# =====================================================
+# 디자인 CSS
+# =====================================================
+st.markdown(
+    """
+    <style>
+    .main {
+        background-color: #fafafa;
+    }
 
-# =========================
-# API 키
-# GitHub 코드에는 API 키를 넣지 않습니다.
-# Streamlit Cloud > Settings > Secrets 에만 넣습니다.
-# =========================
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+    .title-box {
+        padding: 2.5rem 0 1rem 0;
+    }
 
-# 모델명은 필요하면 바꿀 수 있습니다.
-MODEL = "gpt-4o-mini"
+    .main-title {
+        font-size: 3rem;
+        font-weight: 800;
+        color: #2f3340;
+        margin-bottom: 0.3rem;
+    }
 
-# =========================
-# 문장 다듬기 규칙
-# =========================
-SYSTEM_PROMPT = """
-너는 한국어 문장을 자연스럽게 다듬어주는 글쓰기 도우미다.
+    .sub-title {
+        font-size: 1.1rem;
+        color: #6b7280;
+        margin-bottom: 2rem;
+    }
 
-사용자가 문장을 입력하면 다음 방식으로 답한다.
+    .notice-box {
+        background-color: #fff7ed;
+        border: 1px solid #fed7aa;
+        border-radius: 14px;
+        padding: 1rem 1.2rem;
+        color: #9a3412;
+        margin-bottom: 1.5rem;
+    }
 
-1. 다듬은 문장
-2. 왜 이렇게 고쳤는지 짧은 설명
-3. 다른 표현 1개
+    .result-card {
+        background-color: white;
+        border-radius: 20px;
+        padding: 1.5rem;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.04);
+        margin-top: 1rem;
+    }
 
-규칙:
-- 원래 의미를 바꾸지 않는다.
-- 없는 내용을 새로 지어내지 않는다.
-- 문장을 너무 과장하지 않는다.
-- 한국어답고 자연스럽게 고친다.
-- 사용자가 짧은 문장을 입력해도 친절하게 다듬어준다.
-"""
+    .small-label {
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: #4b5563;
+        margin-bottom: 0.4rem;
+    }
 
-# =========================
-# 대화 기록
-# =========================
-if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {
-            "role": "assistant",
-            "content": "다듬고 싶은 문장을 입력해 주세요."
-        }
-    ]
+    .footer-text {
+        font-size: 0.85rem;
+        color: #9ca3af;
+        margin-top: 2rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
-# =========================
-# 초기화 버튼
-# =========================
-if st.button("대화 초기화"):
-    st.session_state.messages = [
-        {
-            "role": "assistant",
-            "content": "대화를 다시 시작합니다. 다듬고 싶은 문장을 입력해 주세요."
-        }
-    ]
-    st.rerun()
+# =====================================================
+# API 연결
+# API 키는 코드에 직접 넣지 않습니다.
+# Streamlit Cloud의 Secrets에 OPENAI_API_KEY로 저장합니다.
+# =====================================================
+try:
+    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+except Exception:
+    st.error("OPENAI_API_KEY가 설정되지 않았습니다. Streamlit Cloud의 Secrets에 API 키를 등록해 주세요.")
+    st.stop()
 
-# =========================
-# 이전 대화 보여주기
-# =========================
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+MODEL = st.secrets.get("OPENAI_MODEL", "gpt-4o-mini")
 
-# =========================
-# 사용자 입력
-# =========================
-user_message = st.chat_input("예: 오늘 너무 힘들었지만 그래도 잘 버틴 것 같아")
+# =====================================================
+# 사이드바
+# =====================================================
+with st.sidebar:
+    st.header("⚙️ 설정")
 
-if user_message:
-    st.session_state.messages.append(
-        {"role": "user", "content": user_message}
+    tone = st.selectbox(
+        "문장 톤",
+        [
+            "자연스럽게",
+            "전문적으로",
+            "부드럽게",
+            "짧고 간결하게",
+            "인스타그램 문구처럼",
+            "이메일 문장처럼"
+        ]
     )
 
-    with st.chat_message("user"):
-        st.markdown(user_message)
+    length = st.selectbox(
+        "길이",
+        [
+            "원문과 비슷하게",
+            "더 짧게",
+            "조금 더 풍부하게"
+        ]
+    )
 
-    messages_for_api = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user_message}
-    ]
+    st.divider()
 
-    with st.chat_message("assistant"):
-        with st.spinner("문장을 다듬는 중입니다..."):
-            response = client.chat.completions.create(
-                model=MODEL,
-                messages=messages_for_api
-            )
+    st.caption("API 키는 화면에 표시되지 않습니다.")
+    st.caption("GitHub 코드에도 API 키를 넣지 않습니다.")
 
-            assistant_message = response.choices[0].message.content
-            st.markdown(assistant_message)
+# =====================================================
+# 메인 화면
+# =====================================================
+left, center, right = st.columns([1, 2.2, 1])
 
-    st.session_state.messages.append(
-        {"role": "assistant", "content": assistant_message}
+with center:
+    st.markdown(
+        """
+        <div class="title-box">
+            <div class="main-title">✍️ 문장 다듬기 앱</div>
+            <div class="sub-title">어색한 문장을 자연스럽고 읽기 좋게 바꿔보세요.</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        """
+        <div class="notice-box">
+        이 앱은 테스트용입니다. 입력한 문장을 바탕으로 표현을 다듬어 줍니다.
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    user_text = st.text_area(
+        "다듬고 싶은 문장",
+        placeholder="예: 오늘 너무 힘들었지만 그래도 잘 버틴 것 같아",
+        height=180
+    )
+
+    col1, col2 = st.columns([1, 1])
+
+    with col1:
+        run_button = st.button("문장 다듬기", use_container_width=True)
+
+    with col2:
+        clear_button = st.button("비우기", use_container_width=True)
+
+    if clear_button:
+        st.rerun()
+
+    if run_button:
+        if not user_text.strip():
+            st.warning("먼저 다듬고 싶은 문장을 입력해 주세요.")
+        else:
+            prompt = f"""
+너는 한국어 문장을 자연스럽고 읽기 좋게 다듬어주는 글쓰기 도우미다.
+
+사용자가 입력한 문장을 아래 조건에 맞게 고쳐라.
+
+조건:
+- 문장 톤: {tone}
+- 문장 길이: {length}
+- 원문의 의미는 바꾸지 말 것
+- 없는 내용을 새로 만들지 말 것
+- 너무 과장하지 말 것
+- 한국어답고 자연스럽게 고칠 것
+
+사용자 문장:
+{user_text}
+
+답변 형식:
+### 다듬은 문장
+수정된 문장
+
+### 수정 이유
+- 이유 1
+- 이유 2
+
+### 다른 표현
+대안 문장 1개
+"""
+
+            with st.spinner("문장을 다듬는 중입니다..."):
+                try:
+                    response = client.chat.completions.create(
+                        model=MODEL,
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": "너는 한국어 문장을 자연스럽게 다듬는 글쓰기 도우미다."
+                            },
+                            {
+                                "role": "user",
+                                "content": prompt
+                            }
+                        ]
+                    )
+
+                    result = response.choices[0].message.content
+
+                    st.markdown(
+                        '<div class="result-card">',
+                        unsafe_allow_html=True
+                    )
+                    st.markdown(result)
+                    st.markdown(
+                        '</div>',
+                        unsafe_allow_html=True
+                    )
+
+                except Exception as e:
+                    st.error(f"오류가 발생했습니다: {e}")
+
+    st.markdown(
+        """
+        <div class="footer-text">
+        GitHub에는 API 키를 올리지 말고, Streamlit Cloud Secrets에만 저장하세요.
+        </div>
+        """,
+        unsafe_allow_html=True
     )
